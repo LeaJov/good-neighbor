@@ -130,6 +130,8 @@
       border-radius: 20px;
     }
 
+    .badge.mine { background: var(--orange); }
+
     .empty { text-align: center; color: #777; }
   </style>
 </head>
@@ -202,6 +204,13 @@
     const db = getFirestore(app);
     const requestsTable = collection(db, "requests");
 
+    // Requests sent from THIS device (so you don't see "I'll help" on your own request)
+    let myRequests = [];
+    try { myRequests = JSON.parse(localStorage.getItem("myRequests")) || []; } catch (e) {}
+
+    // The latest list from the database
+    let lastSnapshot = null;
+
     // Add a new request from the form
     window.addRequest = async function () {
       const name = document.getElementById("name").value.trim();
@@ -212,7 +221,7 @@
         return;
       }
 
-      await addDoc(requestsTable, {
+      const newRequest = await addDoc(requestsTable, {
         name: name,
         task: task,
         when: document.getElementById("when").value.trim(),
@@ -223,6 +232,11 @@
         status: "open",        // open -> taken -> done
         created: Date.now()    // used to show the newest requests first
       });
+
+      // Remember on THIS device that this request is ours
+      myRequests.push(newRequest.id);
+      try { localStorage.setItem("myRequests", JSON.stringify(myRequests)); } catch (e) {}
+      showRequests();
 
       // Clear the form
       document.querySelectorAll("input:not([type]), textarea").forEach(field => field.value = "");
@@ -247,6 +261,18 @@
     // this runs again and redraws the list automatically
     const newestFirst = query(requestsTable, orderBy("created", "desc"));
     onSnapshot(newestFirst, (snapshot) => {
+      lastSnapshot = snapshot;
+      showRequests();
+    }, (error) => {
+      document.getElementById("list").innerHTML =
+        `<div class="card empty">Could not connect to the database. Check the Firebase setup.</div>`;
+      console.log(error);
+    });
+
+    // Draw all requests on the page
+    function showRequests() {
+      const snapshot = lastSnapshot;
+      if (!snapshot) return;
       const list = document.getElementById("list");
       list.innerHTML = "";
 
@@ -258,9 +284,16 @@
       snapshot.forEach((item) => {
         const r = item.data();
         const id = item.id;
+        const isMine = myRequests.includes(id);
 
         let statusText = "Waiting for help";
         let button = `<button class="take" onclick="changeStatus('${id}', 'taken')">I'll help</button>`;
+
+        // You can't offer help on your own request
+        if (isMine && r.status === "open") {
+          statusText = "Waiting for a neighbor to help you";
+          button = "";
+        }
 
         if (r.status === "taken") {
           if (r.weekly) {
@@ -278,10 +311,11 @@
         }
 
         const weeklyBadge = r.weekly ? `<span class="badge">🔁 Every week</span>` : "";
+        const mineBadge = isMine ? `<span class="badge mine">⭐ Your request</span>` : "";
 
         list.innerHTML += `
           <div class="card request ${r.status}">
-            ${weeklyBadge}
+            ${mineBadge} ${weeklyBadge}
             <p class="who">${safe(r.name)} needs: ${safe(r.task)}</p>
             <p class="details">
               🕒 ${safe(r.when) || "-"}<br>
@@ -292,11 +326,7 @@
             ${button}
           </div>`;
       });
-    }, (error) => {
-      document.getElementById("list").innerHTML =
-        `<div class="card empty">Could not connect to the database. Check the Firebase setup.</div>`;
-      console.log(error);
-    });
+    }
 
     // Safety: show text exactly as typed, so nobody can sneak HTML code into the page
     function safe(text) {

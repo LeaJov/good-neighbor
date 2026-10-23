@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Good Neighbor</title>
+  <!-- Friendly, rounded font that is easy to read -->
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+   
+    :root {
+      --green: #2e6b4f;
+      --green-light: #e3f0e8;
+      --orange: #e07a2f;
+      --orange-light: #fdeedd;
+      --blue: #3a6ea5;
+      --blue-light: #e2ecf7;
+      --background: #f6f1e7;
+      --text: #1f2a24;
+    }
+
+    body {
+      font-family: "Nunito", Arial, sans-serif;
+      font-size: 20px;
+      font-weight: 700;          /* bold text everywhere */
+      background: var(--background);
+      color: var(--text);
+      margin: 0;
+    }
+
+    /* Big green header at the top */
+    header {
+      background: linear-gradient(135deg, #2e6b4f, #4a9a72);
+      color: white;
+      text-align: center;
+      padding: 36px 16px 70px;
+      border-radius: 0 0 40px 40px;
+    }
+    header .logo { font-size: 56px; }
+    header h1 { font-size: 42px; font-weight: 900; margin: 8px 0 4px; }
+    header p { margin: 0; font-size: 20px; opacity: 0.9; }
+
+    .container { max-width: 600px; margin: -44px auto 0; padding: 0 16px 40px; }
+
+    h2 { font-size: 26px; font-weight: 900; margin: 0 0 8px; }
+    .section-title { margin: 32px 0 16px; }
+
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 22px;
+      margin-bottom: 18px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Form fields */
+    label { display: block; margin-top: 16px; font-weight: 800; }
+    input, textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 20px;
+      font-weight: 600;
+      padding: 12px 14px;
+      margin-top: 6px;
+      border: 2px solid #ddd;
+      border-radius: 12px;
+      background: #fcfbf8;
+      box-sizing: border-box;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--green); background: white; }
+
+    .weekly-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 20px;
+      padding: 14px;
+      background: var(--green-light);
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    .weekly-option input { width: 28px; height: 28px; margin: 0; accent-color: var(--green); }
+
+    /* Buttons */
+    button {
+      width: 100%;
+      font-family: inherit;
+      font-size: 22px;
+      font-weight: 900;
+      padding: 16px;
+      margin-top: 20px;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      color: white;
+      background: var(--green);
+    }
+    button:hover { filter: brightness(1.1); }
+    button.take { background: var(--orange); }
+    button.done { background: var(--blue); }
+
+    /* Request cards: colored stripe on the left shows the status */
+    .request { border-left: 10px solid var(--orange); }
+    .request.taken { border-left-color: var(--blue); }
+    .request.done  { border-left-color: var(--green); opacity: 0.75; }
+
+    .request .who { font-size: 22px; margin: 8px 0; }
+    .request .details { color: #555; line-height: 1.6; margin: 8px 0; }
+
+    /* Status label */
+    .status {
+      display: inline-block;
+      font-weight: 900;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: var(--orange-light);
+      color: var(--orange);
+    }
+    .status.taken { background: var(--blue-light); color: var(--blue); }
+    .status.done  { background: var(--green-light); color: var(--green); }
+
+    /* "Every week" label */
+    .badge {
+      display: inline-block;
+      background: var(--green);
+      color: white;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    .empty { text-align: center; color: #777; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">🏡🤝</div>
+    <h1>Good Neighbor</h1>
+    <p>Find a regular helper from your neighborhood, or become one.</p>
+  </header>
+
+  <div class="container">
+    <!-- FORM: someone asks for help -->
+    <div class="card">
+      <h2>🙋 I need help</h2>
+
+      <label>Your name</label>
+      <input id="name" placeholder="e.g. Mira">
+
+      <label>What do you need?</label>
+      <textarea id="task" rows="3" placeholder="e.g. Carry my bags home from the market"></textarea>
+
+      <label>When?</label>
+      <input id="when" placeholder="e.g. Saturday morning">
+
+      <label>Neighborhood / address</label>
+      <input id="place" placeholder="e.g. Vračar, Njegoševa 10">
+
+      <label>Phone</label>
+      <input id="phone" placeholder="e.g. 064 123 4567">
+
+      <label class="weekly-option">
+        <input type="checkbox" id="weekly"> 🔁 This repeats every week
+      </label>
+
+      <button onclick="addRequest()">Send request</button>
+    </div>
+
+    <!-- LIST: all requests appear here -->
+    <h2 class="section-title">💚 Requests from neighbors</h2>
+    <div id="list"><div class="card empty">Loading...</div></div>
+  </div>
+
+  <!-- type="module" lets us load Firebase straight from the internet -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ⬇⬇⬇  ⬇⬇⬇
+    const firebaseConfig = {
+
+  apiKey: "AIzaSyDud3oTkVCkEb8ASLpOAwOe6D3MFhUbZ2c",
+
+  authDomain: "good-neighbor-4f5eb.firebaseapp.com",
+
+  projectId: "good-neighbor-4f5eb",
+
+  storageBucket: "good-neighbor-4f5eb.firebasestorage.app",
+
+  messagingSenderId: "973698379180",
+
+  appId: "1:973698379180:web:5c22e505c039558f495e09"
+
+};
+
+    // ⬆⬆⬆ ------------------------------------------------------------- ⬆⬆⬆
+
+    // Connect to our online database
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const requestsTable = collection(db, "requests");
+
+    // Add a new request from the form
+    window.addRequest = async function () {
+      const name = document.getElementById("name").value.trim();
+      const task = document.getElementById("task").value.trim();
+
+      if (name === "" || task === "") {
+        alert("Please write your name and what you need.");
+        return;
+      }
+
+      await addDoc(requestsTable, {
+        name: name,
+        task: task,
+        when: document.getElementById("when").value.trim(),
+        place: document.getElementById("place").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        weekly: document.getElementById("weekly").checked,  // true = every week
+        helper: "",            // name of the neighbor who helps
+        status: "open",        // open -> taken -> done
+        created: Date.now()    // used to show the newest requests first
+      });
+
+      // Clear the form
+      document.querySelectorAll("input:not([type]), textarea").forEach(field => field.value = "");
+      document.getElementById("weekly").checked = false;
+    };
+
+    // A volunteer takes the request, or marks it finished
+    window.changeStatus = async function (id, newStatus) {
+      const changes = { status: newStatus };
+
+      // When someone offers help, ask for their name
+      if (newStatus === "taken") {
+        const helperName = prompt("What is your name?");
+        if (!helperName) return;  // they pressed Cancel
+        changes.helper = helperName.trim();
+      }
+
+      await updateDoc(doc(db, "requests", id), changes);
+    };
+
+    // Listen to the database: every time anything changes (on ANY phone),
+    // this runs again and redraws the list automatically
+    const newestFirst = query(requestsTable, orderBy("created", "desc"));
+    onSnapshot(newestFirst, (snapshot) => {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+
+      if (snapshot.empty) {
+        list.innerHTML = `<div class="card empty">No requests yet.</div>`;
+        return;
+      }
+
+      snapshot.forEach((item) => {
+        const r = item.data();
+        const id = item.id;
+
+        let statusText = "Waiting for help";
+        let button = `<button class="take" onclick="changeStatus('${id}', 'taken')">I'll help</button>`;
+
+        if (r.status === "taken") {
+          if (r.weekly) {
+            // Weekly request: the same neighbor helps every week, so it never "ends"
+            statusText = "Regular helper: " + safe(r.helper);
+            button = "";
+          } else {
+            statusText = safe(r.helper) + " is helping";
+            button = `<button class="done" onclick="changeStatus('${id}', 'done')">Mark as done</button>`;
+          }
+        }
+        if (r.status === "done") {
+          statusText = "Done ✓ (helped by " + safe(r.helper) + ")";
+          button = "";
+        }
+
+        const weeklyBadge = r.weekly ? `<span class="badge">🔁 Every week</span>` : "";
+
+        list.innerHTML += `
+          <div class="card request ${r.status}">
+            ${weeklyBadge}
+            <p class="who">${safe(r.name)} needs: ${safe(r.task)}</p>
+            <p class="details">
+              🕒 ${safe(r.when) || "-"}<br>
+              📍 ${safe(r.place) || "-"}<br>
+              📞 ${safe(r.phone) || "-"}
+            </p>
+            <span class="status ${r.status}">${statusText}</span>
+            ${button}
+          </div>`;
+      });
+    }, (error) => {
+      document.getElementById("list").innerHTML =
+        `<div class="card empty">Could not connect to the database. Check the Firebase setup.</div>`;
+      console.log(error);
+    });
+
+    // Safety: show text exactly as typed, so nobody can sneak HTML code into the page
+    function safe(text) {
+      const div = document.createElement("div");
+      div.textContent = text || "";
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

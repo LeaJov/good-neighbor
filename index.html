@@ -133,6 +133,32 @@
     .badge.mine { background: var(--orange); }
 
     .empty { text-align: center; color: #777; }
+
+    /* Two tabs at the top: "I need help" / "I want to help" */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      background: white;
+      padding: 8px;
+      border-radius: 20px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+      margin-bottom: 18px;
+    }
+    .tab {
+      flex: 1;
+      width: auto;
+      margin: 0;
+      padding: 14px 8px;
+      font-size: 19px;
+      background: transparent;
+      color: var(--text);
+      border-radius: 14px;
+    }
+    .tab.active { background: var(--green); color: white; }
+    .hidden { display: none; }
+
+    /* Smaller grey button for cancelling */
+    button.cancel { background: #8a8a8a; font-size: 18px; padding: 12px; }
   </style>
 </head>
 <body>
@@ -143,73 +169,85 @@
   </header>
 
   <div class="container">
-    <!-- FORM: someone asks for help -->
-    <div class="card">
-      <h2>🙋 I need help</h2>
-
-      <label>Your name</label>
-      <input id="name" placeholder="e.g. Mira">
-
-      <label>What do you need?</label>
-      <textarea id="task" rows="3" placeholder="e.g. Carry my bags home from the market"></textarea>
-
-      <label>When?</label>
-      <input id="when" placeholder="e.g. Saturday morning">
-
-      <label>Neighborhood / address</label>
-      <input id="place" placeholder="e.g. Vračar, Njegoševa 10">
-
-      <label>Phone</label>
-      <input id="phone" placeholder="e.g. 064 123 4567">
-
-      <label class="weekly-option">
-        <input type="checkbox" id="weekly"> 🔁 This repeats every week
-      </label>
-
-      <button onclick="addRequest()">Send request</button>
+    <!-- TABS: choose who you are -->
+    <div class="tabs">
+      <button id="tab-need" class="tab active" onclick="showTab('need')">🙋 I need help</button>
+      <button id="tab-help" class="tab" onclick="showTab('help')">💪 I want to help</button>
     </div>
 
-    <!-- LIST: all requests appear here -->
-    <h2 class="section-title">💚 Requests from neighbors</h2>
-    <div id="list"><div class="card empty">Loading...</div></div>
+    <!-- PAGE 1: someone who needs help -->
+    <div id="page-need">
+      <div class="card">
+        <h2>Ask your neighbors</h2>
+
+        <label>Your name</label>
+        <input id="name" placeholder="e.g. Mira">
+
+        <label>What do you need?</label>
+        <textarea id="task" rows="3" placeholder="e.g. Carry my bags home from the market"></textarea>
+
+        <label>When?</label>
+        <input id="when" placeholder="e.g. Saturday morning">
+
+        <label>Neighborhood / address</label>
+        <input id="place" placeholder="e.g. Vračar, Njegoševa 10">
+
+        <label>Phone</label>
+        <input id="phone" placeholder="e.g. 064 123 4567">
+
+        <label class="weekly-option">
+          <input type="checkbox" id="weekly"> 🔁 This repeats every week
+        </label>
+
+        <button onclick="addRequest()">Send request</button>
+      </div>
+
+      <h2 class="section-title">⭐ My requests</h2>
+      <div id="myList"><div class="card empty">Loading...</div></div>
+    </div>
+
+    <!-- PAGE 2: a neighbor who wants to help -->
+    <div id="page-help" class="hidden">
+      <h2 class="section-title" style="margin-top:8px">💚 Neighbors who need help</h2>
+      <div id="list"><div class="card empty">Loading...</div></div>
+    </div>
   </div>
 
   <!-- type="module" lets us load Firebase straight from the internet -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy }
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // ⬇⬇⬇  ⬇⬇⬇
+    // Our Firebase project (from the Firebase website)
     const firebaseConfig = {
-
-  apiKey: "AIzaSyDud3oTkVCkEb8ASLpOAwOe6D3MFhUbZ2c",
-
-  authDomain: "good-neighbor-4f5eb.firebaseapp.com",
-
-  projectId: "good-neighbor-4f5eb",
-
-  storageBucket: "good-neighbor-4f5eb.firebasestorage.app",
-
-  messagingSenderId: "973698379180",
-
-  appId: "1:973698379180:web:5c22e505c039558f495e09"
-
-};
-
-    // ⬆⬆⬆ ------------------------------------------------------------- ⬆⬆⬆
+      apiKey: "AIzaSyDud3oTkVCkEb8ASLpOAwOe6D3MFhUbZ2c",
+      authDomain: "good-neighbor-4f5eb.firebaseapp.com",
+      projectId: "good-neighbor-4f5eb",
+      storageBucket: "good-neighbor-4f5eb.firebasestorage.app",
+      messagingSenderId: "973698379180",
+      appId: "1:973698379180:web:5c22e505c039558f495e09"
+    };
 
     // Connect to our online database
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const requestsTable = collection(db, "requests");
 
-    // Requests sent from THIS device (so you don't see "I'll help" on your own request)
+    // Requests sent from THIS device, so we know which ones are "mine"
     let myRequests = [];
     try { myRequests = JSON.parse(localStorage.getItem("myRequests")) || []; } catch (e) {}
 
     // The latest list from the database
     let lastSnapshot = null;
+
+    // Switch between the two tabs
+    window.showTab = function (tab) {
+      document.getElementById("page-need").classList.toggle("hidden", tab !== "need");
+      document.getElementById("page-help").classList.toggle("hidden", tab !== "help");
+      document.getElementById("tab-need").classList.toggle("active", tab === "need");
+      document.getElementById("tab-help").classList.toggle("active", tab === "help");
+    };
 
     // Add a new request from the form
     window.addRequest = async function () {
@@ -229,7 +267,7 @@
         phone: document.getElementById("phone").value.trim(),
         weekly: document.getElementById("weekly").checked,  // true = every week
         helper: "",            // name of the neighbor who helps
-        status: "open",        // open -> taken -> done
+        status: "open",        // open -> taken -> (deleted when done)
         created: Date.now()    // used to show the newest requests first
       });
 
@@ -243,79 +281,74 @@
       document.getElementById("weekly").checked = false;
     };
 
-    // A volunteer takes the request, or marks it finished
-    window.changeStatus = async function (id, newStatus) {
-      const changes = { status: newStatus };
+    // A neighbor offers to help
+    window.takeRequest = async function (id) {
+      const helperName = prompt("What is your name?");
+      if (!helperName) return;  // they pressed Cancel
+      await updateDoc(doc(db, "requests", id), { status: "taken", helper: helperName.trim() });
+    };
 
-      // When someone offers help, ask for their name
-      if (newStatus === "taken") {
-        const helperName = prompt("What is your name?");
-        if (!helperName) return;  // they pressed Cancel
-        changes.helper = helperName.trim();
-      }
-
-      await updateDoc(doc(db, "requests", id), changes);
+    // Finished or cancelled: remove the request so the list stays short
+    window.removeRequest = async function (id, question) {
+      if (!confirm(question)) return;
+      await deleteDoc(doc(db, "requests", id));
     };
 
     // Listen to the database: every time anything changes (on ANY phone),
-    // this runs again and redraws the list automatically
+    // this runs again and redraws the lists automatically
     const newestFirst = query(requestsTable, orderBy("created", "desc"));
     onSnapshot(newestFirst, (snapshot) => {
       lastSnapshot = snapshot;
       showRequests();
     }, (error) => {
-      document.getElementById("list").innerHTML =
-        `<div class="card empty">Could not connect to the database. Check the Firebase setup.</div>`;
+      const msg = `<div class="card empty">Could not connect to the database. Check the Firebase setup.</div>`;
+      document.getElementById("list").innerHTML = msg;
+      document.getElementById("myList").innerHTML = msg;
       console.log(error);
     });
 
-    // Draw all requests on the page
+    // Draw both lists: "My requests" and "Neighbors who need help"
     function showRequests() {
-      const snapshot = lastSnapshot;
-      if (!snapshot) return;
-      const list = document.getElementById("list");
-      list.innerHTML = "";
+      if (!lastSnapshot) return;
+      let mine = "";
+      let others = "";
 
-      if (snapshot.empty) {
-        list.innerHTML = `<div class="card empty">No requests yet.</div>`;
-        return;
-      }
-
-      snapshot.forEach((item) => {
+      lastSnapshot.forEach((item) => {
         const r = item.data();
         const id = item.id;
         const isMine = myRequests.includes(id);
+        let statusText = "";
+        let buttons = "";
 
-        let statusText = "Waiting for help";
-        let button = `<button class="take" onclick="changeStatus('${id}', 'taken')">I'll help</button>`;
-
-        // You can't offer help on your own request
-        if (isMine && r.status === "open") {
-          statusText = "Waiting for a neighbor to help you";
-          button = "";
-        }
-
-        if (r.status === "taken") {
-          if (r.weekly) {
-            // Weekly request: the same neighbor helps every week, so it never "ends"
+        if (isMine) {
+          // MY request: I can see who helps me, and close it
+          if (r.status === "open") {
+            statusText = "Waiting for a neighbor to help you";
+            buttons = `<button class="cancel" onclick="removeRequest('${id}', 'Cancel this request?')">Cancel request</button>`;
+          } else if (r.weekly) {
+            statusText = "Your regular helper: " + safe(r.helper);
+            buttons = `<button class="cancel" onclick="removeRequest('${id}', 'Stop weekly help?')">Stop weekly help</button>`;
+          } else {
+            statusText = safe(r.helper) + " is helping you";
+            buttons = `<button class="done" onclick="removeRequest('${id}', 'Mark as done? The request will be removed.')">Mark as done</button>`;
+          }
+        } else {
+          // SOMEONE ELSE's request: I can offer help
+          if (r.status === "open") {
+            statusText = "Waiting for help";
+            buttons = `<button class="take" onclick="takeRequest('${id}')">I'll help</button>`;
+          } else if (r.weekly) {
             statusText = "Regular helper: " + safe(r.helper);
-            button = "";
           } else {
             statusText = safe(r.helper) + " is helping";
-            button = `<button class="done" onclick="changeStatus('${id}', 'done')">Mark as done</button>`;
+            buttons = `<button class="done" onclick="removeRequest('${id}', 'Mark as done? The request will be removed.')">Mark as done</button>`;
           }
-        }
-        if (r.status === "done") {
-          statusText = "Done ✓ (helped by " + safe(r.helper) + ")";
-          button = "";
         }
 
         const weeklyBadge = r.weekly ? `<span class="badge">🔁 Every week</span>` : "";
-        const mineBadge = isMine ? `<span class="badge mine">⭐ Your request</span>` : "";
-
-        list.innerHTML += `
+        const card = `
           <div class="card request ${r.status}">
-            ${mineBadge} ${weeklyBadge}
+            ${weeklyBadge}
             <p class="who">${safe(r.name)} needs: ${safe(r.task)}</p>
             <p class="details">
               🕒 ${safe(r.when) || "-"}<br>
@@ -323,9 +356,16 @@
               📞 ${safe(r.phone) || "-"}
             </p>
             <span class="status ${r.status}">${statusText}</span>
-            ${button}
+            ${buttons}
           </div>`;
+
+        if (isMine) mine += card; else others += card;
       });
+
+      document.getElementById("myList").innerHTML =
+        mine || `<div class="card empty">You haven't asked for help yet.</div>`;
+      document.getElementById("list").innerHTML =
+        others || `<div class="card empty">No one needs help right now.</div>`;
     }
 
     // Safety: show text exactly as typed, so nobody can sneak HTML code into the page
